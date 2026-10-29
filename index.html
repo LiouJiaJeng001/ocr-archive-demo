@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>文件 OCR 自動歸檔示範</title>
+<style>
+:root{--ink:#1f2a37;--sub:#5b6675;--line:#d5dbe3;--bg:#f6f8fb;--card:#fff;--deep:#1e3a5f;--tint:#eef2f7;--ok:#1f6e52;--okbg:#e7f4ee;--warn:#8a5a00;--warnbg:#fff4e0;--acc:#e0662b;--hl:#ffe08a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.6 -apple-system,"Segoe UI","Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif}
+header{background:var(--deep);color:#fff;padding:20px 24px}
+header h1{margin:0 0 6px;font-size:21px}
+header p{margin:0;opacity:.92;max-width:980px}
+.tag{display:inline-block;font-size:12px;padding:2px 8px;border-radius:10px;background:rgba(255,255,255,.18);margin:8px 6px 0 0}
+.wrap{max-width:1500px;margin:0 auto;padding:16px}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:16px;align-items:start}
+@media (max-width:1100px){.grid{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:16px}
+.card h2{margin:0 0 4px;font-size:16px}
+.hint{color:var(--sub);font-size:12.5px;margin:0 0 10px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}
+button.p{font:inherit;padding:7px 16px;border:1px solid var(--deep);background:var(--deep);color:#fff;border-radius:6px;cursor:pointer}
+button.g,label.g{font:inherit;font-size:13px;padding:6px 12px;border:1px solid var(--deep);background:#fff;color:var(--deep);border-radius:6px;cursor:pointer;display:inline-block}
+button:disabled{opacity:.5;cursor:default}
+.drop{border:2px dashed #9fb0c6;border-radius:10px;padding:18px;text-align:center;background:#fbfcfe;transition:background .2s,border-color .2s}
+.drop.over{background:#eaf1fb;border-color:var(--deep)}
+.drop .big{font-size:16px;font-weight:600;color:var(--deep);margin-bottom:4px}
+.drop .row{justify-content:center}
+#model{font-size:12.5px;color:var(--sub);margin-top:8px}
+.stat{font-size:13px;color:var(--sub);margin:0 0 8px}
+.stat b{color:var(--deep);font-size:15px}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{border-bottom:1px solid var(--line);padding:7px 6px;text-align:left;vertical-align:top}
+th{background:var(--tint);font-weight:600;white-space:nowrap}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+#list tr{cursor:pointer}
+#list tr.sel td{background:#f1f6fd}
+td.on{color:var(--sub);word-break:break-all;min-width:120px}
+td.nn{font-weight:600;color:var(--deep);word-break:break-all;min-width:200px}
+td.fo{color:var(--sub);white-space:nowrap}
+.bar{height:8px;border-radius:4px;background:#e3e8ef;overflow:hidden;width:110px;margin:5px 0 2px}
+.bar i{display:block;height:100%;background:var(--deep)}
+.st{font-size:12.5px;white-space:nowrap}
+.st.ok{color:var(--ok)}
+.st.w{color:var(--warn)}
+.cat{display:inline-block;font-size:12px;padding:1px 9px;border-radius:10px;background:var(--tint);color:var(--deep);white-space:nowrap}
+/* 手機：每份文件疊成三行（原始檔名＋狀態／新檔名／類別＋資料夾），不用左右捲 */
+@media (max-width:640px){
+ .tw thead{display:none}
+ #list tr{display:grid;grid-template-columns:22px minmax(0,1fr) auto;column-gap:8px;padding:8px 0;border-bottom:1px solid var(--line)}
+ #list td{border:0;padding:1px 0;min-width:0}
+ #list tr.sel{background:#f1f6fd}
+ #list tr.sel td{background:transparent}
+ #list td.empty{grid-column:1 / -1}
+ #list td.n{grid-column:1;grid-row:1}
+ #list td.on{grid-column:2;grid-row:1}
+ #list td.stc{grid-column:3;grid-row:1;text-align:right}
+ #list td.nn{grid-column:2 / 4;grid-row:2}
+ #list td.ct{grid-column:2;grid-row:3}
+ #list td.fo{grid-column:3;grid-row:3;text-align:right;font-size:12px}
+ .bar{width:80px;margin-left:auto}
+}
+.det{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:14px;align-items:start}
+@media (max-width:760px){.det{grid-template-columns:minmax(0,1fr)}}
+.pv{position:relative;background:#0f1b2b;border-radius:8px;overflow:hidden}
+.pv img{display:block;width:100%;height:auto}
+.pv canvas{position:absolute;left:0;top:0;width:100%;height:100%}
+.meta{font-size:12.5px;color:var(--sub);margin:6px 0 0}
+.fl label{display:block;font-size:12.5px;color:var(--sub);margin:8px 0 2px}
+.fl input,.fl select,.rules input,.rules select{font:inherit;width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink)}
+.fl .chk input,.fl .chk select{background:var(--warnbg);border-color:#e6c27a}
+.fl .chk label::after{content:"　請確認";color:var(--warn);font-weight:600}
+.newname{margin-top:12px;padding:8px 10px;border-radius:6px;background:var(--okbg);font-size:13px;word-break:break-all}
+.newname b{color:var(--ok)}
+pre.ocr{white-space:pre-wrap;font:12.5px/1.6 Consolas,"Microsoft JhengHei",monospace;background:var(--tint);border-radius:6px;padding:8px 10px;max-height:260px;overflow:auto;margin:6px 0 0}
+.rules label{display:block;font-size:12.5px;color:var(--sub);margin:8px 0 2px}
+details{margin-top:10px;font-size:12.5px}
+details summary{cursor:pointer;color:var(--deep)}
+.kw{margin:4px 0;color:var(--sub)}
+.kw b{color:var(--ink)}
+.tree{font-size:13px;line-height:1.8}
+.tree ul{list-style:none;margin:0;padding-left:18px}
+.tree>ul{padding-left:6px}
+.tree .fd{font-weight:600;color:var(--deep)}
+.tree .fi{word-break:break-all;cursor:pointer}
+.tree .root{font-weight:600;color:var(--deep)}
+.ic{display:inline-block;width:15px;height:13px;margin-right:5px;vertical-align:-1px}
+#q{font:inherit;width:100%;padding:7px 10px;border:1px solid var(--line);border-radius:6px}
+.hit{border-top:1px solid var(--line);padding:7px 0;cursor:pointer}
+.hit b{color:var(--deep);font-size:13px;word-break:break-all}
+.hit div{font-size:12.5px;color:var(--sub)}
+mark{background:var(--hl);color:inherit;padding:0 1px;border-radius:2px}
+footer .card{font-size:13px}
+footer h3{margin:10px 0 4px;font-size:14px}
+footer ul{margin:4px 0;padding-left:20px}
+.hero{position:relative;background:#0f1b2b;display:flex;justify-content:center}
+.hero video{display:block;width:100%;max-width:1280px;aspect-ratio:16/9;height:auto;background:#f6f8fb}
+.hero .hb{position:absolute;right:16px;bottom:16px;display:flex;gap:8px}
+.hero .hb button{font-size:13px;line-height:1;font-family:inherit;padding:8px 12px;border-radius:18px;border:1px solid rgba(255,255,255,.5);background:rgba(15,27,43,.62);color:#fff;cursor:pointer}
+.hero .down{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);opacity:0;transition:opacity .4s;font-size:13px;font-family:inherit;color:#fff;background:rgba(15,27,43,.62);border:0;border-radius:18px;padding:8px 14px;cursor:pointer}
+.hero.ended .down{opacity:1}
+@media (max-width:640px){.hero .hb{right:8px;bottom:8px}.hero .hb button,.hero .down{font-size:12px;padding:6px 10px}}
+@media (prefers-reduced-motion:reduce){.hero .down{transition:none}}
+</style>
+</head>
+<body>
+<section class="hero" id="hero" aria-label="示範影片">
+ <video id="heroVid" src="promo.mp4" autoplay muted playsinline preload="auto"></video>
+ <div class="hb"><button type="button" id="heroSnd">🔊 開聲音</button><button type="button" id="heroReplay">↺ 重播</button></div>
+ <button type="button" class="down" id="heroDown">往下操作示範 ↓</button>
+</section>
+
+<header>
+ <h1>文件 OCR 自動歸檔示範</h1>
+ <p>把一批 PDF、掃描檔、手機翻拍丟進來：系統辨識文字、判斷文件類別、抓出日期／往來對象／編號，照規則重新命名、分好資料夾，還能全文搜尋，最後打包下載。</p>
+ <span class="tag">投標用概念示意</span><span class="tag">文件只在您的瀏覽器處理，不上傳</span><span class="tag">範例文件皆為虛構</span>
+</header>
+<div class="wrap">
+ <section class="card">
+  <div class="drop" id="drop">
+   <div class="big">把文件拖進來（可一次多個）</div>
+   <p class="hint">支援 JPG／PNG 照片、掃描檔，以及 PDF（有文字的 PDF 直接讀取，掃描 PDF 才跑 OCR）</p>
+   <div class="row"><button class="p" id="demo" type="button">跑 6 份範例文件</button><label class="g">選擇自己的檔案<input type="file" id="file" accept="image/*,.pdf,application/pdf" multiple style="display:none"></label><button class="g" id="clear" type="button">清空</button></div>
+   <div id="model">第一次辨識時會下載 OCR 模型（繁中＋英文，約 5MB）</div>
+  </div>
+ </section>
+ <div class="grid">
+  <div>
+   <section class="card">
+    <h2>歸檔清單</h2>
+    <p class="stat" id="stat">尚未放入文件</p>
+    <div class="tw"><table><thead><tr><th class="n">#</th><th>原始檔名</th><th>處理</th><th>類別</th><th>新檔名</th><th>資料夾</th></tr></thead><tbody id="list"><tr><td colspan="6" class="hint empty">按「跑 6 份範例文件」，或把自己的文件拖進上面的框</td></tr></tbody></table></div>
+   </section>
+   <section class="card">
+    <h2>逐份檢視</h2>
+    <p class="hint">藍框是辨識出的文字，橘框是抓出的欄位。欄位可以直接改，檔名、資料夾跟著變；標黃的是系統沒把握、要人工確認的。</p>
+    <div id="det"><p class="hint">點清單裡的任一份文件。</p></div>
+   </section>
+  </div>
+  <div>
+   <section class="card rules">
+    <h2>歸檔規則</h2>
+    <label for="self">本公司名稱（出現在文件裡不會被當成往來對象）</label>
+    <input id="self" value="青禾貿易">
+    <label for="nameRule">命名規則</label>
+    <select id="nameRule"><option value="a">日期_類別_往來對象_編號</option><option value="b">類別_日期_往來對象</option><option value="c">往來對象_日期_類別_編號</option></select>
+    <label for="folderRule">資料夾分層</label>
+    <select id="folderRule"><option value="a">類別／年份</option><option value="b">年份／月份／類別</option><option value="c">往來對象／類別</option></select>
+    <details><summary>分類規則（關鍵字）</summary><div id="kws"></div></details>
+   </section>
+   <section class="card">
+    <h2>資料夾預覽</h2>
+    <div class="tree" id="tree"><p class="hint">處理完的文件會出現在這裡</p></div>
+   </section>
+   <section class="card">
+    <h2>全文搜尋</h2>
+    <input id="q" placeholder="例如：清潔、展示架、停水" autocomplete="off">
+    <div id="hits" style="margin-top:8px"><p class="hint">搜尋所有文件辨識出的文字，連掃描檔裡的字也找得到。</p></div>
+   </section>
+   <section class="card">
+    <h2>匯出</h2>
+    <p class="hint">ZIP 內含改好名、分好資料夾的檔案（原檔內容不動）、每份的全文文字檔，以及一張索引表。</p>
+    <div class="row"><button class="p" id="zip" type="button" disabled>下載歸檔 ZIP</button><button class="g" id="csv" type="button" disabled>下載索引 CSV</button></div>
+   </section>
+  </div>
+ </div>
+ <footer>
+  <section class="card">
+   <h3>這頁做了什麼、沒做什麼</h3>
+   <ul>
+    <li>文字辨識用開源的 Tesseract（繁體中文＋英文模型），直接在瀏覽器裡跑，文件不會上傳。</li>
+    <li>電腦轉出的 PDF 本來就有文字，直接讀取，又快又準；掃描檔、照片才跑 OCR。</li>
+    <li>跑 OCR 前會先擦掉表格格線、把歪掉的頁面拉正，表格裡的字才讀得出來。</li>
+    <li>分類和欄位擷取用關鍵字與規則，目前只設了範例的 6 種文件。您的文件類型、命名方式要拿實際樣本來定。</li>
+    <li>手寫、印章蓋到字、很密的表格、模糊或歪斜的翻拍，辨識率會明顯下降。系統沒把握的欄位會標黃，留給人工確認。</li>
+    <li>PDF 示範只處理前 3 頁。範例文件的公司、單號、金額都是虛構的。</li>
+   </ul>
+   <h3>正式版會做的</h3>
+   <ul>
+    <li>先拿 20–30 份您的實際文件試跑，量出各類文件的辨識率，再定分類、命名與資料夾規則。</li>
+    <li>辨識引擎看文件難度選：開源 Tesseract（免費、可離線），或雲端 OCR（Azure／Google，較準、按頁計費）。</li>
+    <li>交付成 Windows 小工具或排程作業：檔案丟進指定資料夾就自動處理，輸出歸檔副本、索引 Excel 和全文搜尋。</li>
+    <li>原檔一律保留不動；每次處理都有紀錄，改錯的可以回查、重跑。</li>
+   </ul>
+  </section>
+ </footer>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script>
+(function(){
+ 'use strict';
+ var SAMPLES = [
+  {url:'samples/s1.jpg', name:'掃描0001.jpg'},
+  {url:'samples/s2.jpg', name:'IMG_20261003_0931.jpg'},
+  {url:'samples/s3.pdf', name:'合約最終版v3.pdf'},
+  {url:'samples/s4.pdf', name:'scan_1015.pdf'},
+  {url:'samples/s5.jpg', name:'新增文件 (3).jpg'},
+  {url:'samples/s6.png', name:'會議紀錄_final.png'}
+ ];
+ // 分類：關鍵字出現次數（每個最多算 3 次），出現在文件開頭（多半是標題）再加 4 分
+ var CATS = [
+  {k:'報價單', kw:['報價單','報價','估價單','有效期限']},
+  {k:'收據', kw:['收據','茲收到','統一發票','發票','收執']},
+  {k:'合約', kw:['合約','契約','甲方','乙方','立合約書人','第一條']},
+  {k:'出貨單', kw:['出貨單','送貨單','出貨','收貨','簽收']},
+  {k:'通知公告', kw:['通知','公告','主旨','說明','發文字號','受文者']},
+  {k:'會議紀錄', kw:['會議紀錄','會議記錄','主席','出席','決議']}
+ ];
+ var NAME_RULES = {
+  a: function(v){ return [v.date, v.cat, v.party, v.no]; },
+  b: function(v){ return [v.cat, v.date, v.party]; },
+  c: function(v){ return [v.party, v.date, v.cat, v.no]; }
+ };
+ var FOLDER_RULES = {
+  a: function(v){ return [v.cat, v.y]; },
+  b: function(v){ return [v.y, v.m, v.cat]; },
+  c: function(v){ return [v.party || '未知對象', v.cat]; }
+ };
+ var FIELDS = [['date','日期'],['party','往來對象'],['no','編號'],['amount','金額']];
+ var MAX_PAGES = 3, MAX_SIDE = 2400;
+ var ORG = /[一-鿿]{2,12}?(?:股份有限公司|有限公司|工程行|文具行|管理委員會|企業社|商行|事務所|工作室)/g;
+ var FOLDER_SVG = '<svg class="ic" viewBox="0 0 16 13"><path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3.6l1.6 1.6h5.8A1.5 1.5 0 0 1 15 4.1v6.4A1.5 1.5 0 0 1 13.5 12h-11A1.5 1.5 0 0 1 1 10.5z" fill="#e8b84a"/></svg>';
+ var FILE_SVG = '<svg class="ic" viewBox="0 0 16 13"><path d="M4 .5h5.5L13 4v8a.5.5 0 0 1-.5.5h-8.5A.5.5 0 0 1 3.5 12V1A.5.5 0 0 1 4 .5z" fill="#fff" stroke="#7c8ea6"/><path d="M9.5.5V4H13" fill="none" stroke="#7c8ea6"/></svg>';
+
+ var docs = [], selId = null, nextId = 1, pool = [], poolStarted = false;
+ if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+
+ function $(id){ return document.getElementById(id); }
+ function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+ function isDone(d){ return d.status === 'done'; }
+ function byId(id){ for (var i = 0; i < docs.length; i++) if (docs[i].id === id) return docs[i]; return null; }
+
+ // ---------- 文字整理 ----------
+ var CJK = '\\u2e80-\\u9fff\\uff00-\\uffef\\u3000-\\u303f';
+ var RE_CJK_SP = new RegExp('([' + CJK + '])[ \\t]+(?=[' + CJK + '])', 'g');
+ // 顯示用：拿掉中文字之間多餘的空白
+ function clean(raw){ return String(raw || '').replace(/\r/g, '').replace(RE_CJK_SP, '$1').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim(); }
+ // 解析用：全形轉半形、標點與數字周圍的空白去掉
+ function forParse(t){
+  return t.replace(/[！-～]/g, function(c){ return String.fromCharCode(c.charCodeAt(0) - 0xfee0); })
+   .replace(/[ \t]*([:\/\-.,$])[ \t]*/g, '$1')
+   .replace(/([一-鿿])[ \t]+(?=[0-9A-Za-z])/g, '$1')
+   .replace(/([0-9A-Za-z])[ \t]+(?=[一-鿿])/g, '$1');
+ }
+ function key(s){ return String(s || '').replace(/[^0-9A-Za-z一-鿿]/g, '').toUpperCase(); }
+ function count(s, w){ var n = 0, i = 0; while ((i = s.indexOf(w, i)) >= 0){ n++; i += w.length; } return n; }
+
+ // ---------- 分類與欄位擷取 ----------
+ function classify(p){
+  var head = p.slice(0, 120), best = {k:'', s:0};
+  CATS.forEach(function(c){
+   var s = 0;
+   c.kw.forEach(function(w){ s += Math.min(count(p, w), 3); if (head.indexOf(w) >= 0) s += 4; });
+   if (s > best.s) best = {k:c.k, s:s};
+  });
+  return best.s >= 5 ? best : {k:'', s:best.s};
+ }
+ function ymd(y, m, d){
+  y = +y; m = +m; d = +d;
+  if (y < 1990 || y > 2100 || m < 1 || m > 12 || d < 1 || d > 31) return '';
+  return y + '-' + (m < 10 ? '0' : '') + m + '-' + (d < 10 ? '0' : '') + d;
+ }
+ function parseDate(s){
+  var m = s.match(/(?:中華)?民國(\d{2,3})年(\d{1,2})月(\d{1,2})日/);
+  if (m) return {v:ymd(+m[1] + 1911, m[2], m[3]), raw:m[0]};
+  m = s.match(/(\d{4})[\/\-.年](\d{1,2})[\/\-.月](\d{1,2})/);
+  if (m && ymd(m[1], m[2], m[3])) return {v:ymd(m[1], m[2], m[3]), raw:m[0]};
+  m = s.match(/(^|[^\d])(\d{2,3})[年.\/](\d{1,2})[月.\/](\d{1,2})/);
+  if (m && +m[2] >= 80 && +m[2] <= 200) return {v:ymd(+m[2] + 1911, m[3], m[4]), raw:m[0].slice(m[1].length)};
+  return null;
+ }
+ // 民國年自動換成西元；有標籤（簽約日期、報價日期…）的優先
+ function findDate(p){
+  var labels = ['簽約日期','報價日期','出貨日期','發文日期','開立日期','會議時間','日期','時間'];
+  for (var i = 0; i < labels.length; i++){
+   var at = p.indexOf(labels[i]);
+   if (at >= 0){ var r = parseDate(p.slice(at, at + 40)); if (r && r.v) return r; }
+  }
+  var r2 = parseDate(p); return r2 && r2.v ? r2 : {v:'', raw:''};
+ }
+ function stripLabel(n){ return n.replace(/^(?:立合約書人|茲收到|收貨單位|受文者|客戶|甲方|乙方|廠商|賣方|買方)/, ''); }
+ function findParty(p, self){
+  var names = (p.match(ORG) || []).map(stripLabel);
+  var others = names.filter(function(n){ return !self || n.indexOf(self) < 0; });
+  if (others.length) return {v:others[0], raw:others[0]};
+  return {v:'', raw:'', internal:names.length > 0};
+ }
+ function fixNo(s){
+  s = s.replace(/\s/g, '');
+  var i = s.search(/[0-9-]/), pre = i < 0 ? s : s.slice(0, i);
+  // 編號字首之後應該都是數字：OCR 常把 0 看成 O、1 看成 l
+  return pre.toUpperCase() + s.slice(pre.length).replace(/[Oo]/g, '0').replace(/[lI|]/g, '1').replace(/S/g, '5').replace(/Z/g, '2').replace(/B/g, '8');
+ }
+ function findNo(p){
+  var m = p.match(/(?:報價單號|出貨單號|收據編號|合約編號|發票號碼|訂單編號|單號|編號|No\.?)\s*:?\s*([A-Za-z]{1,3}-?[0-9OolISZB|]{2,}(?:-[0-9OolISZB|]+)*)/);
+  if (m) return {v:fixNo(m[1]), raw:m[1]};
+  m = p.match(/字號\s*:?\s*([一-鿿]{1,3}字第\s*[0-9OolI]+\s*號)/);
+  if (m) return {v:m[1].replace(/\s/g, '').replace(/[Oo]/g, '0').replace(/[lI]/g, '1'), raw:m[1]};
+  return {v:'', raw:''};
+ }
+ function findAmount(p){
+  var m = p.match(/(?:總計|合計|總金額)\s*:?\s*(?:NT\$|NTD|新臺幣|新台幣)?\s*(\d[\d,]{2,})/i) || p.match(/(?:新臺幣|新台幣|NT\$)\s*(\d[\d,]{2,})/i);
+  return m ? {v:m[1].replace(/,$/, ''), raw:m[1]} : {v:'', raw:''};
+ }
+ function shortParty(n){ return String(n || '').replace(/股份有限公司$|有限公司$/, '').replace(/管理委員會$/, '管委會'); }
+
+ function analyze(d){
+  d.text = clean(d.raw);
+  var p = forParse(d.text), self = $('self').value.trim();
+  var cat = classify(p), dt = findDate(p), pt = findParty(p, self), no = findNo(p), am = findAmount(p);
+  d.f = {cat:cat.k || '待分類', date:dt.v, party:pt.internal ? '內部' : pt.v, no:no.v, amount:am.v};
+  d.hl = {date:dt.raw, party:pt.raw, no:no.raw, amount:am.raw};
+  d.chk = {};
+  if (!cat.k) d.chk.cat = 1;
+  if (!d.f.date) d.chk.date = 1;
+  if (!d.f.party) d.chk.party = 1;
+  if (!/PDF 文字層/.test(d.method)){
+   ['date','party','no','amount'].forEach(function(k){ var c = fieldConf(d, k); if (c !== null && c < 70) d.chk[k] = 1; });
+  }
+  d.edited = {};
+ }
+ // 欄位對應到的字框：同一行含有欄位原文時，該行裡屬於欄位的字
+ function fieldBoxes(d, k){
+  var rk = key(d.hl && d.hl[k]); if (!rk) return [];
+  var out = [];
+  (d.lines || []).forEach(function(ln){
+   if (key(ln.t).indexOf(rk) < 0) return;
+   ln.words.forEach(function(w){ var wk = key(w.t); if (wk && (rk.indexOf(wk) >= 0 || wk.indexOf(rk) >= 0)) out.push(w); });
+  });
+  return out;
+ }
+ // 畫框用：同一行裡屬於欄位的字合併成一個框
+ function fieldRects(d, k){
+  var rk = key(d.hl && d.hl[k]); if (!rk) return [];
+  var out = [];
+  (d.lines || []).forEach(function(ln){
+   if (key(ln.t).indexOf(rk) < 0) return;
+   var r = null;
+   ln.words.forEach(function(w){
+    var wk = key(w.t); if (!wk || (rk.indexOf(wk) < 0 && wk.indexOf(rk) < 0)) return;
+    var b = w.b; r = r ? {x0:Math.min(r.x0, b.x0), y0:Math.min(r.y0, b.y0), x1:Math.max(r.x1, b.x1), y1:Math.max(r.y1, b.y1)} : {x0:b.x0, y0:b.y0, x1:b.x1, y1:b.y1};
+   });
+   if (r) out.push(r);
+  });
+  return out;
+ }
+ function fieldConf(d, k){
+  var ws = fieldBoxes(d, k); if (!ws.length) return null;
+  return Math.min.apply(null, ws.map(function(w){ return w.c; }));
+ }
+
+ // ---------- 命名與資料夾 ----------
+ function safe(s){ return String(s).replace(/[\\\/:*?"<>|\s]+/g, '').slice(0, 40); }
+ function extOf(n){ var m = /\.[A-Za-z0-9]{2,5}$/.exec(n); return m ? m[0].toLowerCase() : ''; }
+ function view(d){
+  var f = d.f;
+  return {date:f.date, cat:f.cat, party:shortParty(f.party), no:f.no, y:f.date ? f.date.slice(0, 4) + '年' : '日期不明', m:f.date ? f.date.slice(5, 7) + '月' : ''};
+ }
+ function recompute(){
+  var seen = {}, nr = NAME_RULES[$('nameRule').value], fr = FOLDER_RULES[$('folderRule').value];
+  docs.filter(isDone).forEach(function(d){
+   var v = view(d);
+   var base = nr(v).filter(Boolean).map(safe).join('_') || '未命名', ext = extOf(d.name);
+   d.folder = fr(v).filter(Boolean).map(safe).join('/');
+   var full = d.folder + '/' + base + ext, n = seen[full] = (seen[full] || 0) + 1;
+   d.newName = base + (n > 1 ? '(' + n + ')' : '') + ext;
+  });
+ }
+
+ // ---------- OCR 工人（第一個就緒就開工，第二個從快取載入後加入） ----------
+ function setModel(t){ $('model').textContent = t; }
+ function addWorker(i){
+  var slot = {cur:null, busy:false, w:null};
+  return Tesseract.createWorker('chi_tra+eng', 1, {logger:function(m){
+   if (m.status === 'recognizing text'){ if (slot.cur){ slot.cur.progress = m.progress; paintRow(slot.cur); } }
+   else if (i === 0 && m.status === 'loading language traineddata') setModel('下載 OCR 模型 ' + Math.round((m.progress || 0) * 100) + '%');
+  }}).then(function(w){ slot.w = w; pool.push(slot); return slot; });
+ }
+ function startPool(){
+  if (poolStarted) return; poolStarted = true;
+  setModel('下載 OCR 模型（繁中＋英文，約 5MB）…');
+  addWorker(0).then(function(){
+   setModel('OCR 模型就緒'); pump();
+   if ((navigator.hardwareConcurrency || 2) >= 4) addWorker(1).then(function(){ setModel('OCR 模型就緒（2 份同時處理）'); pump(); }).catch(function(){});
+  }).catch(function(){ setModel('OCR 模型載入失敗，請重新整理頁面再試'); poolStarted = false; });
+ }
+ function pump(){
+  pool.forEach(function(slot){
+   if (slot.busy) return;
+   var d = docs.filter(function(x){ return x.status === 'queued'; })[0];
+   if (!d) return;
+   slot.busy = true; d.status = 'reading'; paintRow(d);
+   run(d, slot).then(function(){ d.status = 'done'; analyze(d); }, function(e){ d.status = 'error'; d.err = (e && e.message) || '格式不支援'; })
+    .then(function(){ slot.busy = false; slot.cur = null; if (selId == null && isDone(d)) selId = d.id; refresh(d.id === selId); pump(); });
+  });
+ }
+ function linesOf(data){
+  var out = [];
+  function add(l){ out.push({t:l.text, b:l.bbox, words:(l.words || []).map(function(w){ return {t:w.text, c:w.confidence, b:w.bbox}; })}); }
+  (data.blocks || []).forEach(function(b){ (b.paragraphs || []).forEach(function(p){ (p.lines || []).forEach(add); }); });
+  if (!out.length && data.lines) data.lines.forEach(add);
+  return out;
+ }
+ // 辨識前處理：擦掉表格格線（很長的橫、直黑線），不然表格裡的字會被讀成亂碼
+ function stripLines(src){
+  var c = document.createElement('canvas'); c.width = src.width; c.height = src.height;
+  var g = c.getContext('2d'); g.drawImage(src, 0, 0);
+  var W = c.width, H = c.height, id = g.getImageData(0, 0, W, H), p = id.data, N = W * H;
+  var dark = new Uint8Array(N), kill = new Uint8Array(N), L = Math.max(50, Math.round(W * 0.045)), x, y, s, k, j, q;
+  for (j = 0; j < N; j++) dark[j] = p[j * 4] * 0.299 + p[j * 4 + 1] * 0.587 + p[j * 4 + 2] * 0.114 < 150 ? 1 : 0;
+  for (y = 0; y < H; y++) for (x = 0; x < W;){ if (!dark[y * W + x]){ x++; continue; } s = x; while (x < W && dark[y * W + x]) x++; if (x - s >= L) for (k = s; k < x; k++) kill[y * W + k] = 1; }
+  for (x = 0; x < W; x++) for (y = 0; y < H;){ if (!dark[y * W + x]){ y++; continue; } s = y; while (y < H && dark[y * W + x]) y++; if (y - s >= L) for (k = s; k < y; k++) kill[k * W + x] = 1; }
+  for (j = 0; j < N; j++) if (kill[j]) for (k = -1; k < 4; k++){ q = k < 0 ? j : k === 0 ? j - 1 : k === 1 ? j + 1 : k === 2 ? j - W : j + W; if (q >= 0 && q < N) p[q * 4] = p[q * 4 + 1] = p[q * 4 + 2] = 255; }
+  g.putImageData(id, 0, 0);
+  return c;
+ }
+ // rotateAuto 會先把歪掉的頁面拉正再辨識，字框座標是拉正後的；轉回原圖座標才能畫在預覽上
+ function unrotate(lines, rad, W, H){
+  if (!rad) return lines;
+  var cx = W / 2, cy = H / 2, cs = Math.cos(-rad), sn = Math.sin(-rad);
+  function pt(x, y){ var dx = x - cx, dy = y - cy; return [cx + dx * cs - dy * sn, cy + dx * sn + dy * cs]; }
+  function box(b){
+   var ps = [pt(b.x0, b.y0), pt(b.x1, b.y0), pt(b.x0, b.y1), pt(b.x1, b.y1)];
+   var xs = ps.map(function(v){ return v[0]; }), ys = ps.map(function(v){ return v[1]; });
+   return {x0:Math.min.apply(null, xs), y0:Math.min.apply(null, ys), x1:Math.max.apply(null, xs), y1:Math.max.apply(null, ys)};
+  }
+  lines.forEach(function(l){ if (l.b) l.b = box(l.b); l.words.forEach(function(w){ w.b = box(w.b); }); });
+  return lines;
+ }
+ function ocr(slot, d, canvas){
+  slot.cur = d; d.status = 'ocr'; d.progress = 0; paintRow(d);
+  return slot.w.recognize(stripLines(canvas), {rotateAuto:true}, {text:true, blocks:true}).then(function(r){
+   d.skew = r.data.rotateRadians || 0;
+   return {text:r.data.text, lines:unrotate(linesOf(r.data), d.skew, canvas.width, canvas.height), conf:r.data.confidence};
+  });
+ }
+ function loadImage(url){ return new Promise(function(ok, no){ var im = new Image(); im.onload = function(){ ok(im); }; im.onerror = function(){ no(new Error('圖片無法讀取')); }; im.src = url; }); }
+ function toCanvas(src, w, h){
+  var k = Math.min(1, MAX_SIDE / Math.max(w, h)), c = document.createElement('canvas');
+  c.width = Math.round(w * k); c.height = Math.round(h * k);
+  var g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(src, 0, 0, c.width, c.height);
+  return c;
+ }
+ function setPreview(d, c){ d.preview = c.toDataURL('image/jpeg', 0.85); d.pw = c.width; d.ph = c.height; }
+ function run(d, slot){
+  var isPdf = /\.pdf$/i.test(d.name) || d.blob.type === 'application/pdf';
+  if (isPdf) return runPdf(d, slot);
+  var url = URL.createObjectURL(d.blob);
+  return loadImage(url).then(function(im){
+   var c = toCanvas(im, im.naturalWidth, im.naturalHeight); URL.revokeObjectURL(url); setPreview(d, c);
+   return ocr(slot, d, c);
+  }).then(function(r){ d.method = 'OCR'; d.raw = r.text; d.lines = r.lines; d.conf = r.conf; });
+ }
+ function renderPage(page, scale){
+  var vp = page.getViewport({scale:scale}), c = document.createElement('canvas');
+  c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+  var g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+  // intent: 'print' 不靠 requestAnimationFrame，使用者切到別的分頁時也照樣算完
+  return page.render({canvasContext:g, viewport:vp, intent:'print'}).promise.then(function(){ return {c:c, vp:vp}; });
+ }
+ function runPdf(d, slot){
+  var pdf, n, texts = [], first;
+  return d.blob.arrayBuffer().then(function(buf){ return pdfjsLib.getDocument({data:buf}).promise; }).then(function(x){
+   pdf = x; n = Math.min(pdf.numPages, MAX_PAGES); d.pages = pdf.numPages;
+   var chain = Promise.resolve();
+   for (var i = 1; i <= n; i++) (function(i){
+    chain = chain.then(function(){ return pdf.getPage(i); }).then(function(pg){
+     return pg.getTextContent().then(function(tc){
+      texts.push(tc.items.map(function(it){ return it.str + (it.hasEOL ? '\n' : ''); }).join(''));
+      if (i === 1) first = {page:pg, items:tc.items};
+     });
+    });
+   })(i);
+   return chain;
+  }).then(function(){ return renderPage(first.page, 2); }).then(function(r1){
+   setPreview(d, r1.c);
+   var joined = texts.join('\n');
+   if (joined.replace(/\s/g, '').length >= 30){
+    // 有文字層：直接讀，不跑 OCR。每段文字當成一行，用來在預覽上畫框
+    d.method = 'PDF 文字層'; d.raw = joined; d.conf = 100;
+    d.lines = first.items.filter(function(it){ return it.str.trim(); }).map(function(it){
+     var t = pdfjsLib.Util.transform(r1.vp.transform, it.transform), h = Math.hypot(t[2], t[3]);
+     var w = {t:it.str, c:100, b:{x0:t[4], y0:t[5] - h, x1:t[4] + it.width * r1.vp.scale, y1:t[5] + h * 0.2}};
+     return {t:it.str, b:w.b, words:[w]};
+    });
+    return;
+   }
+   var all = [], confs = [], chain = Promise.resolve();
+   for (var j = 1; j <= n; j++) (function(j){
+    chain = chain.then(function(){ return j === 1 ? r1 : pdf.getPage(j).then(function(pg){ return renderPage(pg, 2); }); })
+     .then(function(r){ d.pageNow = j; d.pageN = n; return ocr(slot, d, r.c); })
+     .then(function(o){ all.push(o.text); confs.push(o.conf); if (j === 1) d.lines = o.lines; });
+   })(j);
+   return chain.then(function(){
+    d.method = 'OCR（掃描 PDF）'; d.raw = all.join('\n');
+    d.conf = confs.reduce(function(a, b){ return a + b; }, 0) / confs.length;
+   });
+  });
+ }
+
+ // ---------- 畫面 ----------
+ function statusHtml(d){
+  if (d.status === 'queued') return '<span class="st">排隊中</span>';
+  if (d.status === 'reading') return '<span class="st">讀取中…</span>';
+  if (d.status === 'ocr'){
+   var pc = Math.round((d.progress || 0) * 100);
+   return '<div class="bar"><i style="width:' + pc + '%"></i></div><span class="st">辨識文字 ' + pc + '%' + (d.pageN > 1 ? '（第 ' + d.pageNow + '/' + d.pageN + ' 頁）' : '') + '</span>';
+  }
+  if (d.status === 'error') return '<span class="st w">無法處理：' + esc(d.err) + '</span>';
+  var n = Object.keys(d.chk).length;
+  return '<span class="st ok">✓ ' + (/PDF 文字層/.test(d.method) ? 'PDF 文字層' : 'OCR') + '</span>' + (n ? '<br><span class="st w">⚠ ' + n + ' 欄待確認</span>' : '');
+ }
+ function rowHtml(d, i){
+  var done = isDone(d);
+  return '<tr data-id="' + d.id + '"' + (d.id === selId ? ' class="sel"' : '') + '><td class="n">' + (i + 1) + '</td><td class="on">' + esc(d.name) + '</td><td class="stc">' + statusHtml(d) + '</td><td class="ct">' + (done ? '<span class="cat">' + esc(d.f.cat) + '</span>' : '') + '</td><td class="nn">' + (done ? esc(d.newName) : '') + '</td><td class="fo">' + (done ? esc(d.folder) + '/' : '') + '</td></tr>';
+ }
+ function paintRow(d){
+  var tr = document.querySelector('#list tr[data-id="' + d.id + '"]');
+  if (tr) tr.querySelector('.stc').innerHTML = statusHtml(d);
+ }
+ function renderList(){
+  if (!docs.length){ $('list').innerHTML = '<tr><td colspan="6" class="hint empty">按「跑 6 份範例文件」，或把自己的文件拖進上面的框</td></tr>'; $('stat').textContent = '尚未放入文件'; return; }
+  $('list').innerHTML = docs.map(rowHtml).join('');
+  var done = docs.filter(isDone), chk = done.filter(function(d){ return Object.keys(d.chk).length; }).length;
+  $('stat').innerHTML = '完成 <b>' + done.length + '</b> / ' + docs.length + ' 份' + (chk ? '　・　<b>' + chk + '</b> 份有欄位待確認' : '');
+  $('zip').disabled = $('csv').disabled = !done.length;
+ }
+ function renderTree(){
+  var done = docs.filter(isDone);
+  if (!done.length){ $('tree').innerHTML = '<p class="hint">處理完的文件會出現在這裡</p>'; return; }
+  var root = {};
+  done.forEach(function(d){ var node = root; d.folder.split('/').forEach(function(s){ node = node[s] = node[s] || {}; }); (node['\u0000'] = node['\u0000'] || []).push(d); });
+  function ul(node){
+   var h = '<ul>';
+   Object.keys(node).filter(function(k){ return k !== '\u0000'; }).sort().forEach(function(k){ h += '<li><span class="fd">' + FOLDER_SVG + esc(k) + '</span>' + ul(node[k]) + '</li>'; });
+   (node['\u0000'] || []).forEach(function(d){ h += '<li class="fi" data-id="' + d.id + '">' + FILE_SVG + esc(d.newName) + '</li>'; });
+   return h + '</ul>';
+  }
+  $('tree').innerHTML = '<div class="root">' + FOLDER_SVG + '歸檔結果</div>' + ul(root);
+ }
+ function snippet(s, i, n){
+  var a = Math.max(0, i - 14), b = Math.min(s.length, i + n + 24);
+  return (a ? '…' : '') + esc(s.slice(a, i)) + '<mark>' + esc(s.slice(i, i + n)) + '</mark>' + esc(s.slice(i + n, b)) + (b < s.length ? '…' : '');
+ }
+ function renderSearch(){
+  var q = $('q').value.replace(/\s+/g, '');
+  if (!q){ $('hits').innerHTML = '<p class="hint">搜尋所有文件辨識出的文字，連掃描檔裡的字也找得到。</p>'; return; }
+  var hits = [];
+  docs.filter(isDone).forEach(function(d){
+   var hay = d.text.replace(/[ \t]+/g, '').replace(/\n+/g, ' '), i = hay.toLowerCase().indexOf(q.toLowerCase());
+   if (i >= 0) hits.push('<div class="hit" data-id="' + d.id + '"><b>' + esc(d.newName) + '</b><div>' + snippet(hay, i, q.length) + '</div></div>');
+  });
+  $('hits').innerHTML = '<div class="hint" style="margin:0">找到 ' + hits.length + ' 份</div>' + hits.join('');
+ }
+ function drawBoxes(d){
+  var cv = document.querySelector('#det canvas'); if (!cv) return;
+  cv.width = d.pw; cv.height = d.ph;
+  var g = cv.getContext('2d'), lw = Math.max(1.5, d.pw / 700);
+  g.lineWidth = lw;
+  // 藍框：一行一框；只有雜點、沒有字的行不畫
+  (d.lines || []).forEach(function(l){
+   if (!l.b || key(l.t).length < 2) return;
+   var b = l.b, pad = lw; g.fillStyle = 'rgba(43,108,214,.08)'; g.strokeStyle = 'rgba(43,108,214,.5)';
+   g.fillRect(b.x0 - pad, b.y0 - pad, b.x1 - b.x0 + pad * 2, b.y1 - b.y0 + pad * 2); g.strokeRect(b.x0 - pad, b.y0 - pad, b.x1 - b.x0 + pad * 2, b.y1 - b.y0 + pad * 2);
+  });
+  g.lineWidth = lw * 2;
+  ['date','party','no','amount'].forEach(function(k){ fieldRects(d, k).forEach(function(b){
+   var pad = lw * 2; g.fillStyle = 'rgba(224,102,43,.16)'; g.strokeStyle = '#e0662b';
+   g.fillRect(b.x0 - pad, b.y0 - pad, b.x1 - b.x0 + pad * 2, b.y1 - b.y0 + pad * 2); g.strokeRect(b.x0 - pad, b.y0 - pad, b.x1 - b.x0 + pad * 2, b.y1 - b.y0 + pad * 2);
+  }); });
+ }
+ function renderDetail(){
+  var d = byId(selId);
+  if (!d || !isDone(d)){ $('det').innerHTML = '<p class="hint">點清單裡的任一份文件。</p>'; return; }
+  var opts = CATS.map(function(c){ return c.k; }).concat(['待分類']).map(function(k){ return '<option' + (k === d.f.cat ? ' selected' : '') + '>' + k + '</option>'; }).join('');
+  var fl = '<div' + (d.chk.cat ? ' class="chk"' : '') + '><label for="f_cat">類別</label><select id="f_cat" data-k="cat">' + opts + '</select></div>' +
+   FIELDS.map(function(f){ return '<div' + (d.chk[f[0]] ? ' class="chk"' : '') + '><label for="f_' + f[0] + '">' + f[1] + '</label><input id="f_' + f[0] + '" data-k="' + f[0] + '" value="' + esc(d.f[f[0]]) + '"></div>'; }).join('');
+  var deg = Math.abs((d.skew || 0) * 180 / Math.PI);
+  var how = /PDF 文字層/.test(d.method) ? 'PDF 本身有文字，直接讀取（沒跑 OCR）' : d.method + '・平均信心 ' + Math.round(d.conf) + '%' + (deg >= 0.3 ? '・已自動拉正 ' + deg.toFixed(1) + '°' : '');
+  $('det').innerHTML = '<div class="det"><div><div class="pv"><img alt="文件預覽" src="' + d.preview + '"><canvas></canvas></div><p class="meta">' + esc(d.name) + '　・　' + esc(how) + (d.pages > MAX_PAGES ? '　・　共 ' + d.pages + ' 頁，示範只處理前 ' + MAX_PAGES + ' 頁' : '') + '</p></div>' +
+   '<div class="fl">' + fl + '<div class="newname" id="nn"></div><label style="margin-top:12px">辨識出的文字</label><pre class="ocr">' + esc(d.text) + '</pre></div></div>';
+  drawBoxes(d); paintNewName(d);
+ }
+ function paintNewName(d){ var el = $('nn'); if (el) el.innerHTML = '歸檔為：<b>' + esc(d.folder + '/' + d.newName) + '</b>'; }
+ function refresh(withDetail){ recompute(); renderList(); renderTree(); renderSearch(); if (withDetail) renderDetail(); }
+
+ // ---------- 加入文件 ----------
+ function addFiles(list){
+  list.forEach(function(f){ docs.push({id:nextId++, name:f.name, blob:f.blob, status:'queued', chk:{}, f:{}}); });
+  renderList(); startPool(); pump();
+ }
+ $('demo').onclick = function(){
+  var btn = this; btn.disabled = true;
+  Promise.all(SAMPLES.map(function(s){ return fetch(s.url).then(function(r){ if (!r.ok) throw new Error(s.name); return r.blob(); }).then(function(b){ return {name:s.name, blob:b}; }); }))
+   .then(addFiles).catch(function(){ setModel('範例文件載入失敗，請重新整理頁面'); }).then(function(){ btn.disabled = false; });
+ };
+ $('file').onchange = function(){ addFiles([].map.call(this.files, function(f){ return {name:f.name, blob:f}; })); this.value = ''; };
+ $('clear').onclick = function(){ docs = docs.filter(function(d){ return d.status === 'reading' || d.status === 'ocr'; }); selId = null; refresh(true); };
+ var drop = $('drop');
+ ['dragenter','dragover'].forEach(function(t){ drop.addEventListener(t, function(e){ e.preventDefault(); drop.classList.add('over'); }); });
+ ['dragleave','drop'].forEach(function(t){ drop.addEventListener(t, function(e){ e.preventDefault(); drop.classList.remove('over'); }); });
+ drop.addEventListener('drop', function(e){ var fs = [].filter.call(e.dataTransfer.files, function(f){ return /^image\//.test(f.type) || /\.pdf$/i.test(f.name); }); if (fs.length) addFiles(fs.map(function(f){ return {name:f.name, blob:f}; })); });
+ function pickRow(e){ var el = e.target.closest('[data-id]'); if (!el) return; selId = +el.getAttribute('data-id'); renderList(); renderDetail(); if (e.currentTarget !== $('list')) $('det').scrollIntoView({behavior:'smooth', block:'nearest'}); }
+ $('list').onclick = pickRow; $('tree').onclick = pickRow; $('hits').onclick = pickRow;
+ $('det').addEventListener('input', function(e){
+  var k = e.target.getAttribute('data-k'), d = byId(selId); if (!k || !d) return;
+  d.f[k] = e.target.value.trim(); d.edited[k] = 1; delete d.chk[k]; e.target.parentNode.className = '';
+  recompute(); renderList(); renderTree(); renderSearch(); paintNewName(d);
+ });
+ $('self').oninput = function(){
+  var self = this.value.trim();
+  docs.filter(isDone).forEach(function(d){ if (d.edited.party) return; var pt = findParty(forParse(d.text), self); d.f.party = pt.internal ? '內部' : pt.v; d.hl.party = pt.raw; if (d.f.party) delete d.chk.party; else d.chk.party = 1; });
+  refresh(true);
+ };
+ $('nameRule').onchange = $('folderRule').onchange = function(){ refresh(false); var d = byId(selId); if (d && isDone(d)) paintNewName(d); };
+ $('q').oninput = renderSearch;
+ $('kws').innerHTML = CATS.map(function(c){ return '<div class="kw"><b>' + c.k + '</b>：' + c.kw.join('、') + '</div>'; }).join('') + '<div class="kw">都不符合的歸到「待分類」，留給人工判斷。</div>';
+
+ // ---------- 匯出 ----------
+ function csvText(){
+  var rows = [['原始檔名','新檔名','資料夾','類別','日期','往來對象','編號','金額','處理方式','待確認欄位','內容摘要']];
+  docs.filter(isDone).forEach(function(d){ rows.push([d.name, d.newName, d.folder, d.f.cat, d.f.date, d.f.party, d.f.no, d.f.amount, d.method, Object.keys(d.chk).join(' '), d.text.replace(/\s+/g, ' ').slice(0, 80)]); });
+  return '﻿' + rows.map(function(r){ return r.map(function(c){ return '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"'; }).join(','); }).join('\r\n');
+ }
+ function save(blob, name){ var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000); }
+ $('csv').onclick = function(){ save(new Blob([csvText()], {type:'text/csv'}), '歸檔索引.csv'); };
+ $('zip').onclick = function(){
+  var z = new JSZip(), btn = this; btn.disabled = true;
+  docs.filter(isDone).forEach(function(d){
+   z.file('歸檔結果/' + d.folder + '/' + d.newName, d.blob);
+   z.file('歸檔結果/全文/' + d.newName.replace(/\.[^.]+$/, '') + '.txt', d.text);
+  });
+  z.file('歸檔結果/索引.csv', csvText());
+  z.generateAsync({type:'blob'}).then(function(b){ save(b, '歸檔結果.zip'); }).then(function(){ btn.disabled = false; });
+ };
+ window.__ocrDemo = {docs:function(){ return docs; }, fieldBoxes:fieldBoxes, fieldRects:fieldRects};
+})();
+</script>
+<script>
+(function(){var v=document.getElementById("heroVid"),hero=document.getElementById("hero");if(!v)return;
+var p=v.play();if(p&&p.catch)p.catch(function(){});
+document.getElementById("heroSnd").onclick=function(){v.muted=!v.muted;this.textContent=v.muted?"🔊 開聲音":"🔇 關聲音";if(v.paused)v.play().catch(function(){});};
+document.getElementById("heroReplay").onclick=function(){hero.classList.remove("ended");v.currentTime=0;v.play().catch(function(){});};
+v.addEventListener("ended",function(){hero.classList.add("ended");});
+document.getElementById("heroDown").onclick=function(){document.querySelector("header").scrollIntoView({behavior:"smooth"});};
+})();
+</script>
+</body>
+</html>
